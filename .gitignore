@@ -1,0 +1,5 @@
+Debug
+*.txt
+*.user
+*.vcproj
+main.cpp
