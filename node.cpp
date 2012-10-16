@@ -23,6 +23,16 @@ Node& Node::operator [](std::string key) { // TODO: separate out-of-bounds and t
 	} else throw NodeException(std::string("invalid access or type mismatch"));
 }
 
+Node::size_type Node::size() {
+	if (_type == Reference || _type == Link) {
+		return get_anchor(_str).size();
+	} else if (_type == Map || _type == ObjMap) {
+		return (size_type)_map.size();
+	} else if (_type == Sequence || _type == ObjSequence) {
+		return (size_type)_seq.size();
+	} else throw NodeException(std::string("invalid access or type mismatch"));
+}
+
 std::string Node::get_class_name() {
 	if (_type == Reference || _type == Link) {
 		return get_anchor(_str).get_class_name();

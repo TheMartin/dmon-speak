@@ -33,6 +33,7 @@ public:
 	enum NodeType {
 		String,Int,Float,Boolean,Map,Sequence,ObjMap,ObjSequence,Reference,Link
 	};
+	typedef unsigned int size_type;
 private:
 	friend class Parser;
 	std::map<std::string,Node> _map;
@@ -42,8 +43,9 @@ private:
 	static std::map<std::string,Node> _alias_table;
 public:
 	Node(NodeType type=Node::String): _type(type) {}
-	Node& operator[](unsigned int n);
+	Node& operator[](size_type n);
 	Node& operator[](std::string key);
+	size_type size();
 	std::string get_class_name();
 	void operator>>(int &n);
 	void operator>>(double &x);
