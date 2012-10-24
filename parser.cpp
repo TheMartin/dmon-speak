@@ -16,7 +16,7 @@ std::string tokentypes[] = {
 
 Parser::Parser(std::istream& is):
 	_is(is), _iit(_is), _eos(), _skip_comments(true),
-	_document(Node(Node::Boolean)), _generated(false)
+	_document(), _generated(false)
 {
 	_is >> std::noskipws;
 }
@@ -29,7 +29,7 @@ Node& Parser::get_document() {
 		interpret();
 		_generated = true;
 	}
-	return _document;
+	return *_document;
 }
 
 void Parser::lex() {
@@ -280,8 +280,8 @@ void Parser::interpret() {
 	std::cout << "Interpreting A-OK!" << std::endl;
 }
 
-Node Parser::interpret_value() {
-	Node result;
+Node* Parser::interpret_value() {
+	Node* result;
 	bool has_alias = false;
 	std::string alias;
 	if (accept(TOK_AMPERSAND)) {
@@ -301,12 +301,14 @@ Node Parser::interpret_value() {
 		result = interpret_link();
 	} else {
 		TokenType t = (*_cur_token).type;
-		result._type = 
-			(t == TOK_FLOAT) ? Node::Float :
-			(t == TOK_INT)   ? Node::Int :
-			(t == TOK_BOOL)  ? Node::Boolean :
-							   Node::String;
-		result._str = (*_cur_token).contents;
+		switch(t) {
+			case TOK_FLOAT: result = new NodeFloat(); break;
+			case TOK_INT: result = new NodeInt(); break;
+			case TOK_BOOL: result = new NodeBool(); break;
+			case TOK_STRING:
+			default: result = new NodeString(); break;
+		}
+		result->set_contents((*_cur_token).contents);
 		_cur_token++;
 	}
 	if (!has_alias && accept(TOK_AMPERSAND)) {
@@ -315,73 +317,74 @@ Node Parser::interpret_value() {
 		accept(TOK_IDENTIFIER);
 	}
 	if (has_alias) {
-		result.add_as_anchor(alias);
+		result->add_as_anchor(alias);
 	}
 	return result;
 }
 
-Node Parser::interpret_map() {
-	Node result(Node::Map);
+Node* Parser::interpret_map() {
+	Node* result = new NodeMap();
 	if (!accept(TOK_CBRACE_R)) {
 			std::string key;
 		do {
 			key = (*_cur_token).contents;
 			accept(TOK_IDENTIFIER);
 			accept(TOK_COLON);
-			result.add_to_map(key, interpret_value());
+			result->add_to_map(key, interpret_value());
 		} while (accept(TOK_COMMA));
 		accept(TOK_CBRACE_R);
 	}
 	return result;
 }
 
-Node Parser::interpret_seq() {
-	Node result(Node::Sequence);
+Node* Parser::interpret_seq() {
+	Node* result = new NodeSeq();
 	if (!accept(TOK_SBRACE_L)) {
 		do {
-			result.add_to_seq(interpret_value());
+			result->add_to_seq(interpret_value());
 		} while (accept(TOK_COMMA));
 		accept(TOK_SBRACE_R);
 	}
 	return result;
 }
 
-Node Parser::interpret_obj() {
-	Node result;
-	result._str = (*_cur_token).contents;
+Node* Parser::interpret_obj() {
+	Node* result;
+	std::string class_name = (*_cur_token).contents;
 	accept(TOK_IDENTIFIER);
 	accept(TOK_RBRACE_L);
 	if (!accept(TOK_RBRACE_R)) {
 		if ((*_cur_token).type == TOK_IDENTIFIER) {
-			result._type = Node::ObjMap;
+			result = new NodeObjMap();
 			std::string key;
 			do {
 				key = (*_cur_token).contents;
 				accept(TOK_IDENTIFIER);
 				accept(TOK_COLON);
-				result.add_to_map(key, interpret_value());
+				result->add_to_map(key, interpret_value());
 			} while (accept(TOK_COMMA));
 		} else {
-			result._type = Node::ObjSequence;
+			result = new NodeObjSeq();
 			do {
-				result.add_to_seq(interpret_value());
+				result->add_to_seq(interpret_value());
 			} while (accept(TOK_COMMA));
 		}
 		accept(TOK_RBRACE_R);
 	}
+	result->set_class_name(class_name);
 	return result;
 }
 
-Node Parser::interpret_link() {
-	Node result(Node::Link);
-	result._str = (*_cur_token).contents;
+Node* Parser::interpret_link() {
+	Node* result = new NodeLink();
+	result->set_target((*_cur_token).contents);
 	accept(TOK_IDENTIFIER);
 	return result;
 }
 
-Node Parser::interpret_ref() {
-	Node result(Node::Reference);
-	result._str = (*_cur_token).contents;
+Node* Parser::interpret_ref() {
+	Node* result = new NodeRef();
+	result->set_target((*_cur_token).contents);
 	accept(TOK_IDENTIFIER);
 	return result;
 }
@@ -396,12 +399,12 @@ void Parser::check_for_cycles() {
 		}
 	}
 	unsigned int cnt = 0;
-	for (std::map<std::string,Node>::iterator it = Node::_alias_table.begin();
+	for (std::map<std::string,Node*>::iterator it = Node::_alias_table.begin();
 		it != Node::_alias_table.end(); it++) {
 		_ordering.insert(std::pair<std::string,unsigned int>((*it).first,cnt));
 		cnt++;
 	}
-	for (std::map<std::string,Node>::iterator it = Node::_alias_table.begin();
+	for (std::map<std::string,Node*>::iterator it = Node::_alias_table.begin();
 		it != Node::_alias_table.end(); it++) {
 		std::cout << "checking " << (*it).first << " for cyclical references..." << std::endl;
 		recursive_check((*it).second, (*it).first);
@@ -424,22 +427,25 @@ void Parser::check_for_cycles() {
 	std::cout << "No cycles detected!" << std::endl;
 }
 
-void Parser::recursive_check(Node &n, std::string alias) {
+void Parser::recursive_check(Node* n, std::string alias) {
 	std::cout << "searching node..." << std::endl;
-	n.print(3);
-	if (n._type == Node::Map || n._type == Node::ObjMap) {
-		for (std::map<std::string,Node>::iterator it = n._map.begin();
-			it != n._map.end(); it++) {
-			recursive_check((*it).second,alias);
-		}
-	} else if (n._type == Node::Sequence || n._type == Node::ObjSequence) {
-		for (std::vector<Node>::iterator it = n._seq.begin();
-			it != n._seq.end(); it++) {
-			recursive_check((*it),alias);
-		}
-	} else if (n._type == Node::Reference || n._type == Node::Link) {
-		std::cout << "found a link to " << n._str << " from " << alias << "!" << std::endl;
-		_graph[_ordering[alias]][_ordering[n._str]] = true;
+	n->print(3);
+	switch (n->get_type()) {
+		case Node::Map:
+		case Node::ObjMap:
+		case Node::Sequence:
+		case Node::ObjSequence:
+			for (Node::iterator it = n->begin(); it != n->end(); it++) {
+				recursive_check((*it),alias);
+			};
+			break;
+		case Node::Reference:
+		case Node::Link:
+			std::cout << "found a link to " << n->get_target() << " from " << alias << "!" << std::endl;
+			_graph[_ordering[alias]][_ordering[n->get_target()]] = true;
+			break;
+		default:
+			break;
 	}
 }
 

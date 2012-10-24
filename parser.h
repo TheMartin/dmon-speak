@@ -34,29 +34,194 @@ public:
 		String,Int,Float,Boolean,Map,Sequence,ObjMap,ObjSequence,Reference,Link
 	};
 	typedef unsigned int size_type;
-private:
+	class iterator;
 	friend class Parser;
-	std::map<std::string,Node> _map;
-	std::vector<Node> _seq;
-	std::string _str; // value / class name / anchor
 	NodeType _type;
-	static std::map<std::string,Node> _alias_table;
+protected:
+	static std::map<std::string,Node*> _alias_table;
 public:
 	Node(NodeType type=Node::String): _type(type) {}
+	NodeType get_type() {return _type;}
+	virtual Node& operator[](size_type n);
+	virtual Node& operator[](std::string key);
+	virtual size_type size();
+	virtual std::string get_class_name();
+	virtual void set_class_name(std::string name);
+	virtual void operator>>(int &n);
+	virtual void operator>>(double &x);
+	virtual void operator>>(std::string &s);
+	virtual void operator>>(bool &b);
+	virtual void print(int indent);
+	virtual iterator begin();
+	virtual iterator end();
+protected:
+	virtual void set_contents(std::string contents);
+	virtual void set_target(std::string target);
+	virtual std::string get_target();
+	virtual void add_to_map(std::string key, Node* n);
+	virtual void add_to_seq(Node* n);
+	static Node& get_anchor(std::string alias);
+	void add_as_anchor(std::string alias);
+};
+
+class iterNodeImpl;
+class iterNodeMapImpl;
+class iterNodeSeqImpl;
+
+class iterNodeImpl {
+public:
+	virtual iterNodeImpl* clone() = 0;
+	virtual void increment() = 0;
+	virtual bool equals(iterNodeImpl& rhs) = 0;
+	virtual bool equal_accept(iterNodeMapImpl& rhs) = 0;
+	virtual bool equal_accept(iterNodeSeqImpl& rhs) = 0;
+	virtual Node* dereference() = 0;
+};
+
+class iterNodeMapImpl: public iterNodeImpl {
+	std::map<std::string,Node*>::iterator it;
+public:
+	iterNodeMapImpl(std::map<std::string,Node*>::iterator iter);
+	iterNodeMapImpl(const iterNodeMapImpl& rhs);
+	iterNodeImpl* clone();
+	void increment();
+	bool equals(iterNodeImpl& rhs);
+	bool equal_accept(iterNodeMapImpl& rhs);
+	bool equal_accept(iterNodeSeqImpl& rhs);
+	Node* dereference();
+};
+
+class iterNodeSeqImpl: public iterNodeImpl {
+	std::vector<Node*>::iterator it;
+public:
+	iterNodeSeqImpl(std::vector<Node*>::iterator iter);
+	iterNodeSeqImpl(const iterNodeSeqImpl& rhs);
+	iterNodeImpl* clone();
+	void increment();
+	bool equals(iterNodeImpl& rhs);
+	bool equal_accept(iterNodeMapImpl& rhs);
+	bool equal_accept(iterNodeSeqImpl& rhs);
+	Node* dereference();
+};
+
+class Node::iterator {
+	iterNodeImpl *_impl;
+public:
+	iterator();
+	iterator(std::map<std::string,Node*>::iterator iter);
+	iterator(std::vector<Node*>::iterator iter);
+	iterator(const iterator& rhs);
+	iterator& operator=(const iterator& rhs);
+	~iterator();
+	iterator& operator++();
+	iterator operator++(int);
+	bool operator==(const iterator& rhs);
+	bool operator!=(const iterator& rhs);
+	Node* operator*();
+};
+
+class NodeMap: public Node {
+protected:
+	std::map<std::string,Node*> _map;
+public:
+	NodeMap(Node::NodeType type = Node::Map): Node(type) {}
+	Node& operator[](std::string key);
+	size_type size();
+	void add_to_map(std::string key, Node* n);
+	iterator begin();
+	iterator end();
+	virtual void print(int indent);
+};
+
+class NodeSeq: public Node {
+protected:
+	std::vector<Node*> _seq;
+public:
+	NodeSeq(Node::NodeType type = Node::Sequence): Node(type) {}
+	Node& operator[](size_type n);
+	size_type size();
+	void add_to_seq(Node *n);
+	iterator begin();
+	iterator end();
+	virtual void print(int indent);
+};
+
+class NodeObjMap: public NodeMap {
+protected:
+	std::string _name;
+public:
+	NodeObjMap(): NodeMap(Node::ObjMap) {}
+	std::string get_class_name();
+	void set_class_name(std::string name);
+	void print(int indent);
+};
+
+class NodeObjSeq: public NodeSeq {
+protected:
+	std::string _name;
+public:
+	NodeObjSeq(): NodeSeq(Node::ObjSequence) {}
+	std::string get_class_name();
+	void set_class_name(std::string name);
+	void print(int indent);
+};
+
+class NodeRef: public Node {
+protected:
+	std::string _target;
+	void set_target(std::string target);
+	std::string get_target();
+public:
+	NodeRef(Node::NodeType type = Node::Reference): Node(type) {}
 	Node& operator[](size_type n);
 	Node& operator[](std::string key);
 	size_type size();
 	std::string get_class_name();
+	void set_class_name(std::string name);
 	void operator>>(int &n);
 	void operator>>(double &x);
 	void operator>>(std::string &s);
 	void operator>>(bool &b);
 	void print(int indent);
-private:
-	void add_to_map(std::string key, Node& n);
-	void add_to_seq(Node& n);
-	static Node& get_anchor(std::string alias);
-	void add_as_anchor(std::string alias);
+};
+
+class NodeLink: public NodeRef {
+public:
+	NodeLink(): NodeRef(Node::Link) {}
+};
+
+class NodeLiteral: public Node {
+protected:
+	std::string _str;
+	void set_contents(std::string contents);
+public:
+	NodeLiteral(Node::NodeType type = Node::String): Node(type) {}
+	virtual void print(int indent);
+};
+
+class NodeBool: public NodeLiteral {
+public:
+	NodeBool(): NodeLiteral(Node::Boolean) {}
+	void operator>>(bool &b);
+};
+
+class NodeInt: public NodeLiteral {
+public:
+	NodeInt(): NodeLiteral(Node::Int) {}
+	void operator>>(int &n);
+};
+
+class NodeFloat: public NodeLiteral {
+public:
+	NodeFloat(): NodeLiteral(Node::Float) {}
+	void operator>>(double &x);
+};
+
+class NodeString: public NodeLiteral {
+public:
+	NodeString(): NodeLiteral(Node::String) {}
+	void operator>>(std::string &s);
+	void print(int indent);
 };
 
 class Parser {
@@ -91,7 +256,7 @@ class Parser {
 	std::istream_iterator<char> _iit, _eos;
 	std::vector<Token>::iterator _cur_token;
 	bool _skip_comments;
-	Node _document;
+	Node *_document;
 	bool **_graph;
 	std::map<std::string,int> _ordering;
 	int *_color;
@@ -116,14 +281,14 @@ private:
 	void parse_map();
 	void parse_seq();
 	void parse_obj();
-	Node interpret_value();
-	Node interpret_map();
-	Node interpret_seq();
-	Node interpret_obj();
-	Node interpret_ref();
-	Node interpret_link();
+	Node* interpret_value();
+	Node* interpret_map();
+	Node* interpret_seq();
+	Node* interpret_obj();
+	Node* interpret_ref();
+	Node* interpret_link();
 	void check_for_cycles();
-	void recursive_check(Node& n, std::string alias);
+	void recursive_check(Node* n, std::string alias);
 	void dfs_visit(int i);
 };
 
