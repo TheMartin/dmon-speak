@@ -1,22 +1,25 @@
 #include "parser.h"
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <map>
 #include <vector>
 
 std::string types[] = {
-	"String","Int","Float","Boolean","Map","Sequence","ObjMap","ObjSequence","Reference","Link"
+	"String","Int","Float",
+	"Boolean","Map","Sequence",
+	"ObjMap","ObjSequence","Reference","Link"
 };
 
 std::string tokentypes[] = {
 	"CBRACE_L","CBRACE_R","SBRACE_L","SBRACE_R","RBRACE_L","RBRACE_R",
-	"INTERROBANG","ASTERISK","AT","AMPERSAND","COLON","COMMA",
+	"BANG","ASTERISK","AT","AMPERSAND","COLON","COMMA",
 	"IDENTIFIER","STRING","INT","FLOAT","BOOL"
 };
 
 Parser::Parser(std::istream& is):
 	_is(is), _iit(_is), _eos(), _skip_comments(true),
-	_document(), _generated(false)
+	_document(), _generated(false), _cur_line(1)
 {
 	_is >> std::noskipws;
 }
@@ -39,13 +42,14 @@ void Parser::lex() {
 
 		if (char_tokens.find(*_iit) != std::string::npos) {
 			Token t;
+			t.line = _cur_line;
 			t.type = *_iit == '{' ? TOK_CBRACE_L :
 	 				 *_iit == '}' ? TOK_CBRACE_R :
 					 *_iit == '[' ? TOK_SBRACE_L :
 					 *_iit == ']' ? TOK_SBRACE_R :
 					 *_iit == '(' ? TOK_RBRACE_L :
 					 *_iit == ')' ? TOK_RBRACE_R :
-					 *_iit == '!' ? TOK_INTERROBANG :
+					 *_iit == '!' ? TOK_BANG :
 					 *_iit == '*' ? TOK_ASTERISK :
 					 *_iit == '@' ? TOK_AT :
 					 *_iit == '&' ? TOK_AMPERSAND :
@@ -58,6 +62,7 @@ void Parser::lex() {
 		} else if (*_iit == '"') {
 			next_sym();
 			Token t;
+			t.line = _cur_line;
 			t.type = TOK_STRING;
 			bool escape = false, closed = false;
 			while (_iit != _eos && !closed) {
@@ -88,12 +93,15 @@ void Parser::lex() {
 				set_skip_comments(!escape);
 				next_sym();
 			}
-			if (!closed) throw LexException(std::string("unterminated string"));
+			if (!closed) {
+				throw LexException(t.line, std::string("unterminated string"));
+			}
 			_token_list.push_back(t);
 
 		} else if (is_an_identifier_letter(*_iit)) { // identifier
 			Token t;
 			t.type = TOK_IDENTIFIER;
+			t.line = _cur_line;
 			while (_iit != _eos && (is_an_identifier_letter(*_iit) || is_a_digit(*_iit))) {
 				t.contents += *_iit;
 				next_sym();
@@ -106,6 +114,7 @@ void Parser::lex() {
 		} else if (is_a_digit(*_iit) || is_a_sign(*_iit)) {
 			Token t;
 			t.type = TOK_INT;
+			t.line = _cur_line;
 			if (_iit != _eos && is_a_sign(*_iit)) { // sign
 				t.contents += *_iit;
 				next_sym();
@@ -139,8 +148,9 @@ void Parser::lex() {
 
 		} else if (is_whitespace(*_iit)) {
 			next_sym();
+		} else {
+			throw LexException(_cur_line, std::string("invalid token")); // unknown token!
 		}
-		else throw LexException(std::string("invalid token")); // unknown identifier!
 	}
 
 	std::cout << "Lexing A-OK!" << std::endl;
@@ -152,12 +162,14 @@ void Parser::set_skip_comments(bool mode) {
 
 void Parser::next_sym() {
 	if (_iit != _eos) {
+		if (*_iit == '\n') ++_cur_line;
 		++_iit;
 	}
 	if (_skip_comments && _iit != _eos && *_iit == '#') {
 		do {
 			++_iit;
 		} while (_iit != _eos && *_iit != '\n');
+		if (*_iit == '\n') ++_cur_line;
 		++_iit;
 	}
 }
@@ -193,7 +205,11 @@ void Parser::parse() {
 bool Parser::expect(TokenType t) {
 	if (accept(t)) {
 		return true;
-	} else throw ParseException(std::string("unexpected token"));
+	} else {
+		std::string str("unexpected token ");
+		str = str + tokentypes[(*_cur_token).type] + ", expected " + tokentypes[t];
+		throw ParseException((*_cur_token).line, str);
+	}
 }
 
 bool Parser::accept(TokenType t) {
@@ -214,20 +230,28 @@ void Parser::parse_value() {
 		parse_map();
 	} else if (accept(TOK_SBRACE_L)) {
 		parse_seq();
-	} else if (accept(TOK_INTERROBANG)) {
+	} else if (accept(TOK_BANG)) {
 		parse_obj();
 	} else if (accept(TOK_ASTERISK)) {
-		if (has_alias) throw ParseException(std::string("reference or link is aliased"));
+		if (has_alias) {
+			throw ParseException((*_cur_token).line, std::string("reference or link is aliased"));
+		}
 		expect(TOK_IDENTIFIER);
 		is_ref = true;
 	} else if (accept(TOK_AT)) {
-		if (has_alias) throw ParseException(std::string("reference or link is aliased"));
+		if (has_alias) {
+			throw ParseException((*_cur_token).line, std::string("reference or link is aliased"));
+		}
 		expect(TOK_IDENTIFIER);
 		is_ref = true;
 	} else if (accept(TOK_BOOL) || accept(TOK_INT) || accept(TOK_FLOAT) || accept(TOK_STRING)) {
-	} else throw ParseException(std::string("invalid value"));
+	} else {
+		throw ParseException((*_cur_token).line, std::string("invalid value"));
+	}
 	if (!has_alias && accept(TOK_AMPERSAND)) {
-		if (is_ref) throw ParseException(std::string("reference or link is aliased"));
+		if (is_ref) {
+			throw ParseException((*_cur_token).line, std::string("reference or link is aliased"));
+		}
 		expect(TOK_IDENTIFIER);
 	}
 }
@@ -293,7 +317,7 @@ Node* Parser::interpret_value() {
 		result = interpret_map();
 	} else if (accept(TOK_SBRACE_L)) {
 		result = interpret_seq();
-	} else if (accept(TOK_INTERROBANG)) {
+	} else if (accept(TOK_BANG)) {
 		result = interpret_obj();
 	} else if (accept(TOK_ASTERISK)) {
 		result = interpret_ref();
@@ -392,34 +416,34 @@ Node* Parser::interpret_ref() {
 void Parser::check_for_cycles() {
 	unsigned int alias_count = Node::_alias_table.size();
 	_graph = new bool*[alias_count];
-	for (unsigned int i = 0; i < alias_count; i++) {
+	for (unsigned int i = 0; i < alias_count; ++i) {
 		_graph[i] = new bool[alias_count];
-		for (unsigned int j = 0; j < alias_count; j++) {
+		for (unsigned int j = 0; j < alias_count; ++j) {
 			_graph[i][j] = false;
 		}
 	}
 	unsigned int cnt = 0;
 	for (std::map<std::string,Node*>::iterator it = Node::_alias_table.begin();
-		it != Node::_alias_table.end(); it++) {
+		it != Node::_alias_table.end(); ++it) {
 		_ordering.insert(std::pair<std::string,unsigned int>((*it).first,cnt));
 		cnt++;
 	}
 	for (std::map<std::string,Node*>::iterator it = Node::_alias_table.begin();
-		it != Node::_alias_table.end(); it++) {
+		it != Node::_alias_table.end(); ++it) {
 		std::cout << "checking " << (*it).first << " for cyclical references..." << std::endl;
 		recursive_check((*it).second, (*it).first);
 	}
-	for (unsigned int i = 0; i < alias_count; i++) {
-		for (unsigned int j = 0; j < alias_count; j++) {
+	for (unsigned int i = 0; i < alias_count; ++i) {
+		for (unsigned int j = 0; j < alias_count; ++j) {
 			std::cout << _graph[i][j] << " ";
 		}
 		std::cout << std::endl;
 	}
 	_color = new int[alias_count];
-	for (unsigned int i = 0; i < alias_count; i++) {
+	for (unsigned int i = 0; i < alias_count; ++i) {
 		_color[i] = 0;
 	}
-	for (unsigned int i = 0; i < alias_count; i++) {
+	for (unsigned int i = 0; i < alias_count; ++i) {
 		if (_color[i] == 0) {
 			dfs_visit(i);
 		}
@@ -435,7 +459,7 @@ void Parser::recursive_check(Node* n, std::string alias) {
 		case Node::ObjMap:
 		case Node::Sequence:
 		case Node::ObjSequence:
-			for (Node::iterator it = n->begin(); it != n->end(); it++) {
+			for (Node::iterator it = n->begin(); it != n->end(); ++it) {
 				recursive_check((*it),alias);
 			};
 			break;
@@ -451,7 +475,7 @@ void Parser::recursive_check(Node* n, std::string alias) {
 
 void Parser::dfs_visit(int i) {
 	_color[i] = 1;
-	for (unsigned int j = 0; j < Node::_alias_table.size(); j++) {
+	for (unsigned int j = 0; j < Node::_alias_table.size(); ++j) {
 		if (_graph[i][j]) {
 			if (_color[j] == 0) {
 				dfs_visit(j);

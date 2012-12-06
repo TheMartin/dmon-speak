@@ -9,13 +9,17 @@
 #include <stdexcept>
 
 class LexException: public std::runtime_error {
+	unsigned int _line;
 public:
-	LexException(std::string &t): std::runtime_error("LexException: " + t) {}
+	LexException(unsigned int l, std::string &t): std::runtime_error("LexException: " + t), _line(l) {}
+	unsigned int line() {return _line;}
 };
 
 class ParseException: public std::runtime_error {
+	unsigned int _line;
 public:
-	ParseException(std::string &t): std::runtime_error("ParseException: " + t) {}
+	ParseException(unsigned int l, std::string &t): std::runtime_error("ParseException: " + t), _line(l) {}
+	unsigned int line() {return _line;}
 };
 
 class ValidateException: public std::runtime_error {
@@ -232,7 +236,7 @@ class Parser {
 		TOK_SBRACE_R,
 		TOK_RBRACE_L,
 		TOK_RBRACE_R,
-		TOK_INTERROBANG,
+		TOK_BANG,
 		TOK_ASTERISK,
 		TOK_AT,
 		TOK_AMPERSAND,
@@ -248,8 +252,10 @@ class Parser {
 	struct Token {
 		TokenType type;
 		std::string contents;
+		unsigned int line;
 	};
 
+	unsigned int _cur_line;
 	bool _generated;
 	std::istream& _is;
 	std::vector<Token> _token_list;

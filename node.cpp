@@ -110,12 +110,12 @@ Node::iterator NodeMap::end() {
 }
 
 void NodeMap::print(int indent) {
-	for (int i = 0; i < indent; i++) {
+	for (int i = 0; i < indent; ++i) {
 		std::cout << " ";
 	}
 	std::cout << types[_type] << " ";
 	std::cout << ":" << std::endl;
-	for (std::map<std::string,Node*>::iterator it = _map.begin(); it != _map.end(); it++) {
+	for (std::map<std::string,Node*>::iterator it = _map.begin(); it != _map.end(); ++it) {
 		(*it).second->print(indent+1);
 	}
 }
@@ -145,12 +145,12 @@ Node::iterator NodeSeq::end() {
 }
 
 void NodeSeq::print(int indent) {
-	for (int i = 0; i < indent; i++) {
+	for (int i = 0; i < indent; ++i) {
 		std::cout << " ";
 	}
 	std::cout << types[_type] << " ";
 	std::cout << ":" << std::endl;
-	for (std::vector<Node*>::iterator it = _seq.begin(); it != _seq.end(); it++) {
+	for (std::vector<Node*>::iterator it = _seq.begin(); it != _seq.end(); ++it) {
 		(*it)->print(indent+1);
 	}
 }
@@ -164,13 +164,13 @@ void NodeObjMap::set_class_name(std::string name) {
 }
 
 void NodeObjMap::print(int indent) {
-	for (int i = 0; i < indent; i++) {
+	for (int i = 0; i < indent; ++i) {
 		std::cout << " ";
 	}
 	std::cout << types[_type] << " ";
 	std::cout << "\"" << _name << "\" ";
 	std::cout << ":" << std::endl;
-	for (std::map<std::string,Node*>::iterator it = _map.begin(); it != _map.end(); it++) {
+	for (std::map<std::string,Node*>::iterator it = _map.begin(); it != _map.end(); ++it) {
 		(*it).second->print(indent+1);
 	}
 }
@@ -184,13 +184,13 @@ void NodeObjSeq::set_class_name(std::string name) {
 }
 
 void NodeObjSeq::print(int indent) {
-	for (int i = 0; i < indent; i++) {
+	for (int i = 0; i < indent; ++i) {
 		std::cout << " ";
 	}
 	std::cout << types[_type] << " ";
 	std::cout << "\"" << _name << "\" ";
 	std::cout << ":" << std::endl;
-	for (std::vector<Node*>::iterator it = _seq.begin(); it != _seq.end(); it++) {
+	for (std::vector<Node*>::iterator it = _seq.begin(); it != _seq.end(); ++it) {
 		(*it)->print(indent+1);
 	}
 }
@@ -240,7 +240,7 @@ void NodeRef::operator >>(bool &b) {
 }
 
 void NodeRef::print(int indent) {
-	for (int i = 0; i < indent; i++) {
+	for (int i = 0; i < indent; ++i) {
 		std::cout << " ";
 	}
 	std::cout << types[_type] << " ";
@@ -252,7 +252,7 @@ void NodeLiteral::set_contents(std::string contents) {
 }
 
 void NodeLiteral::print(int indent) {
-	for (int i = 0; i < indent; i++) {
+	for (int i = 0; i < indent; ++i) {
 		std::cout << " ";
 	}
 	std::cout << types[_type] << " ";
@@ -282,7 +282,7 @@ void NodeString::operator >>(std::string &s) {
 }
 
 void NodeString::print(int indent) {
-	for (int i = 0; i < indent; i++) {
+	for (int i = 0; i < indent; ++i) {
 		std::cout << " ";
 	}
 	std::cout << types[_type] << " ";
