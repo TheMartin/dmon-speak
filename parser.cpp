@@ -111,7 +111,7 @@ void Parser::lex() {
 			}
 			_token_list.push_back(t);
 
-		} else if (is_a_digit(*_iit) || is_a_sign(*_iit)) {
+		} else if (is_a_digit(*_iit) || is_a_sign(*_iit) || *_iit == '.') {
 			Token t;
 			t.type = TOK_INT;
 			t.line = _cur_line;
