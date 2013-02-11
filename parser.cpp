@@ -363,7 +363,7 @@ Node* Parser::interpret_map() {
 
 Node* Parser::interpret_seq() {
 	Node* result = new NodeSeq();
-	if (!accept(TOK_SBRACE_L)) {
+	if (!accept(TOK_SBRACE_R)) {
 		do {
 			result->add_to_seq(interpret_value());
 		} while (accept(TOK_COMMA));
